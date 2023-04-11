@@ -78,7 +78,7 @@ void setup(void)
 {
   // Setup Terminal
   Serial.begin(9600);
-  Serial3.begin(9600);  //  Serial3 will be used to communicate with the PM sensor
+  Serial3.begin(9600);  // Serial3 will be used to communicate with the PM sensor
   Serial.println("Respira Bien Cookstove Sensor");
   Serial.println();
 
