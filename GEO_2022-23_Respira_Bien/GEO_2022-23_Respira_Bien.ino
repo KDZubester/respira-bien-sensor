@@ -1,5 +1,5 @@
 // GEO Cookstove Sensor Code
-// Respira Bien 2022-2023
+// Respira Bien 2022-2023 
 // Arduino code for the cookstove sensor
 // This file contains setup() and loop(), as well as functions for initializing the sensors
 
