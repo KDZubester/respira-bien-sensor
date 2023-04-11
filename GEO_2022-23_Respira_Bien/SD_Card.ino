@@ -68,11 +68,13 @@ bool writeToFile(DateTime now, double CO, double CO_raw, double CO2, double CO2_
         myFile.print(",      ");
         myFile.print(CO_raw);         //Raw CO output
         myFile.print(",      ");
-        Serial.println("CO2");
-        Serial.println(CO2, DEC);
+//        Serial.println("CO2");
+//        Serial.println(CO2, DEC);
         myFile.print(CO2);        //CO2 concentration, ppm
         myFile.print(",      ");
-        myFile.print(CO2_raw, DEC);        //Raw CO2 output
+//        Serial.println("CO2 Raw");
+//        Serial.println(CO2_raw, DEC);
+        myFile.print(CO2_raw);        //Raw CO2 output
         myFile.print(",      ");
         myFile.print(pm2_5);      //PM 2.5um concentration,
         myFile.print(",      ");

@@ -52,6 +52,8 @@ String pm2_5;
 String pm10;
 double ppmCO = 0;
 double ppmCO2 = 0;
+double co2raw = 0;
+double coraw = 0;
 volatile bool togglePushed = false;
 volatile bool selectPushed = false;
 volatile bool menuArrowState = false;
@@ -283,14 +285,20 @@ void loop(void)
       //pm.measure();         // PM sensor reads measurements, variables in PM library will contain the results
       //pm2_5 = pm.pm2_5;     // Concentration of PM that is 2.5micrometers
       //pm10 = pm.pm10;       // Concentration of PM that is 10micrometers
-      ppmCO = (co.measure() * calibratedSlopeCO) + calibratedInterceptCO;           // Concentration of CO in parts per million
-      ppmCO2 = (co2.measure() * calibratedSlopeCO2) + calibratedInterceptCO2;   // Concentration of CO2 in parts per million
+      co2raw = co2.measure();
+      coraw = co.measure();
+      ppmCO = (coraw * calibratedSlopeCO) + calibratedInterceptCO;           // Concentration of CO in parts per million
+      ppmCO2 = (co2raw * calibratedSlopeCO2) + calibratedInterceptCO2;   // Concentration of CO2 in parts per million
+//      Serial.println("CO2 Raw main file:");
+//      Serial.println(co2raw, DEC);
+//      Serial.println("CO2 main file:");
+//      Serial.println(ppmCO2, DEC);
       printMeasureScreen(measureArrowPos, ppmCO, ppmCO2, "0");//pm2_5);
       break;
     case record:
       printMeasureScreen(measureArrowPos, ppmCO, ppmCO2, "0");//pm2_5);
       measureWaitButtons();
-      writeSuccess = writeToFile(rtc.now(), ppmCO, co.measure(), ppmCO2, co2.measure(), "0","0");//pm2_5, pm10);
+      writeSuccess = writeToFile(rtc.now(), ppmCO, coraw, ppmCO2, co2raw, "0","0");//pm2_5, pm10);
       break;
     case error:
       LED_RED();
