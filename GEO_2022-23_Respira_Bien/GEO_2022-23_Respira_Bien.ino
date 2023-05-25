@@ -16,15 +16,15 @@
 #include <String.h>
 
 /*
- * Pin configuration:
- * GND -> GND
- * VCC -> 5V
- * SCK -> D13
- * SDA -> D11
- * RES -> D8
- * DC  -> D9
- * CS  -> D10
- */
+   Pin configuration:
+   GND -> GND
+   VCC -> 5V
+   SCK -> D13
+   SDA -> D11
+   RES -> D8
+   DC  -> D9
+   CS  -> D10
+*/
 
 U8G2_SSD1309_128X64_NONAME0_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
 
@@ -43,7 +43,7 @@ RTC_PCF8523 rtc;      // Real time clock object
 PM pm;
 CO2 co2;
 CO co;
-File myFile;          
+File myFile;
 
 
 // GLOBAL VARIABLES
@@ -51,7 +51,13 @@ String fileName = "datos.csv";
 String pm2_5;
 String pm10;
 double ppmCO = 0;
+double C_x = 0.0; // C_x is defined in the CO sensor spec sheet
+double V_gas_0 = 46.5; //in mV
+
 double ppmCO2 = 0;
+double ppmPrelimCO2 = 0.0;
+double coRaw = 0.0;
+double co2Raw = 0.0;
 volatile bool togglePushed = false;
 volatile bool selectPushed = false;
 volatile bool menuArrowState = false;
@@ -63,17 +69,19 @@ volatile int waitDebounce = 0;
 volatile int measureTime = 150; //Every 12 is one second
 
 
-// Calibrated parameters for mapping the CO and CO2 values 
-double calibratedInterceptCO = -431.29;
-double calibratedSlopeCO = 30.036;
-double calibratedInterceptCO2 = -254.05;
-double calibratedSlopeCO2 = 2.1045;
+// Calibrated parameters for mapping the CO and CO2 values
+double calibratedInterceptCO = -881.3;//-2821.8;//-431.29;
+double calibratedSlopeCO = 19.032;//34.492;//30.036;
+double prelimInterceptCO2 = -254.05;
+double prelimSlopeCO2 = 2.1045;
+double calibratedInterceptCO2 = 35.02;//-1320.7;//-254.05;
+double calibratedSlopeCO2 = 0.8504;//1.6013;//2.1045;
 
 // Enumeration of state variable for the state machine
 enum state {menu, wait, measure, record, error, options};
 enum state currentState;
 
-void setup(void) 
+void setup(void)
 {
   // Setup Terminal
   Serial.begin(9600);
@@ -86,11 +94,11 @@ void setup(void)
   u8g2.setFont(u8g2_font_tinytim_tr);  // choose a suitable font
   // Find fonts from: https://github.com/olikraus/u8g2/wiki/fntlistallplain#u8g2-font-list
 
-  // Start Screen 
+  // Start Screen
   u8g2.setDrawColor(1);
   u8g2.setFont(u8g2_font_8x13_mr);  // choose a suitable font
-  u8g2.drawStr(20,25,"Bienvenidos");  // write something to the internal memory
-  u8g2.sendBuffer();          // transfer internal memory to the display 
+  u8g2.drawStr(20, 25, "Bienvenidos"); // write something to the internal memory
+  u8g2.sendBuffer();          // transfer internal memory to the display
   delay(2000);
   u8g2.clearBuffer();
   u8g2.sendBuffer();
@@ -105,8 +113,8 @@ void setup(void)
   pinMode(GREEN, OUTPUT);           // Configures GREEN pin as OUTPUT
   digitalWrite(FAN, LOW);           // Sets MOSFET pin to LOW
 
-//  attachInterrupt(digitalPinToInterrupt(INTERRUPT), isr, FALLING);  // Connects the RTC SQW pin to the MCU interrupt pin
-  attachInterrupt(digitalPinToInterrupt(SELECT), isrSelect, FALLING); 
+  //  attachInterrupt(digitalPinToInterrupt(INTERRUPT), isr, FALLING);  // Connects the RTC SQW pin to the MCU interrupt pin
+  attachInterrupt(digitalPinToInterrupt(SELECT), isrSelect, FALLING);
   attachInterrupt(digitalPinToInterrupt(TOGGLE), isrToggle, FALLING);
 
   initSensors(false, true, true, true, true);
@@ -115,45 +123,49 @@ void setup(void)
 
   digitalWrite(FAN, HIGH);
 
-//  String dateDay = (char*)rtc.now().day();
-//  String dateMonth = (char*)rtc.now().month();
-//  String dateYear = (char*)rtc.now().year();
-//  String dateHour = (char*)rtc.now().hour();
-//  String dateMin = (char*)rtc.now().minute();
-//  String dateSec = (char*)rtc.now().second();
-//
-//  fileName = dateDay + '_' + dateMonth + '_' + dateYear + '_' + dateHour + '_' + dateMin + '_' + dateSec;
+  //  String dateDay = (char*)rtc.now().day();
+  //  String dateMonth = (char*)rtc.now().month();
+  //  String dateYear = (char*)rtc.now().year();
+  //  String dateHour = (char*)rtc.now().hour();
+  //  String dateMin = (char*)rtc.now().minute();
+  //  String dateSec = (char*)rtc.now().second();
+  //
+  //  fileName = dateDay + '_' + dateMonth + '_' + dateYear + '_' + dateHour + '_' + dateMin + '_' + dateSec;
 
   bool makeHeader = printHeader();
-  if (makeHeader) { Serial.println("made header for file"); }
-  else { Serial.println("failed to make header for file"); }
+  if (makeHeader) {
+    Serial.println("made header for file");
+  }
+  else {
+    Serial.println("failed to make header for file");
+  }
 }
 
-void loop(void) 
+void loop(void)
 {
   static int fanTimer = 0;
   static bool writeSuccess = false;
   static bool SDCardSuccess = false;
-//  togglePushed = false;
-//  selectPushed = false;
-  
+  //  togglePushed = false;
+  //  selectPushed = false;
+
   // Perform state update (Mealy).
-  switch(currentState) 
-  { 
+  switch (currentState)
+  {
     case menu:
       //Serial.println("Menu");
-      if (selectPushed) 
+      if (selectPushed)
       {
-        if (menuArrowState) 
-        { 
-          currentState = options; 
+        if (menuArrowState)
+        {
+          currentState = options;
           clearScreen();
         }
-        else 
-        { 
+        else
+        {
           currentState = measure;
           LED_GREEN();
-          waitDebounce = 0; 
+          waitDebounce = 0;
           clearScreen();
         }
         selectPushed = false;
@@ -161,10 +173,10 @@ void loop(void)
       break;
     case wait:
       //Serial.println("Wait");
-      if (selectPushed) 
+      if (selectPushed)
       {
-        if (measureArrowState) 
-        { 
+        if (measureArrowState)
+        {
           LED_OFF();
           currentState = menu;
           measureArrowPos = 65;
@@ -174,23 +186,23 @@ void loop(void)
         else {}
         selectPushed = false;
       }
-      else if (waitDebounce > measureTime) 
+      else if (waitDebounce > measureTime)
       {
         LED_OFF();
         waitDebounce = 0;
         currentState = measure;
       }
-      else 
+      else
       {
         currentState = wait;
       }
       break;
     case measure:
       //Serial.println("Measure");
-      if (selectPushed) 
+      if (selectPushed)
       {
-        if (measureArrowState) 
-        { 
+        if (measureArrowState)
+        {
           currentState = menu;
           measureArrowPos = 65;
           measureArrowState = false;
@@ -199,17 +211,17 @@ void loop(void)
         else {}
         selectPushed = false;
       }
-      else 
+      else
       {
-        currentState = record; 
+        currentState = record;
       }
       break;
     case record:
       //Serial.println("Record");
-      if (selectPushed) 
+      if (selectPushed)
       {
-        if (measureArrowState) 
-        { 
+        if (measureArrowState)
+        {
           currentState = menu;
           measureArrowPos = 65;
           measureArrowState = false;
@@ -235,38 +247,38 @@ void loop(void)
       }
       break;
     case options:
-//      if (selectPushed) 
-//      {
-//        selectPushed = false;
-//        if (optionsArrowPos == 85) 
-//        { 
-//          Serial.println("Enter Menu State");
-//          optionsArrowPos = 20;
-//          menuArrowPos = 25;
-//          clearScreen();
-//          currentState = menu; 
-//        }
-//      }
-//      break;
+    //      if (selectPushed)
+    //      {
+    //        selectPushed = false;
+    //        if (optionsArrowPos == 85)
+    //        {
+    //          Serial.println("Enter Menu State");
+    //          optionsArrowPos = 20;
+    //          menuArrowPos = 25;
+    //          clearScreen();
+    //          currentState = menu;
+    //        }
+    //      }
+    //      break;
     default:
       break;
   }
 
   // Perform state action (Moore).
-  switch(currentState) 
-  { 
+  switch (currentState)
+  {
     case menu:
       //Serial.println("State: Menu");
       printMenuScreen(menuArrowPos);
-      if (togglePushed) 
+      if (togglePushed)
       {
-        if (menuArrowState) 
-        { 
-          menuArrowState = false; 
+        if (menuArrowState)
+        {
+          menuArrowState = false;
           menuArrowPos = 25;
         }
-        else 
-        { 
+        else
+        {
           menuArrowState = true;
           menuArrowPos = 45;
         }
@@ -274,23 +286,51 @@ void loop(void)
       }
       break;
     case wait:
-      printMeasureScreen(measureArrowPos, ppmCO, ppmCO2, "0");//pm2_5);
+      printMeasureScreen(measureArrowPos, C_x, ppmCO2, pm2_5);
       measureWaitButtons();
       waitDebounce++;
       break;
     case measure:
       measureWaitButtons();
-      //pm.measure();         // PM sensor reads measurements, variables in PM library will contain the results
-      //pm2_5 = pm.pm2_5;     // Concentration of PM that is 2.5micrometers
-      //pm10 = pm.pm10;       // Concentration of PM that is 10micrometers
-      ppmCO = (co.measure() * calibratedSlopeCO) + calibratedInterceptCO;           // Concentration of CO in parts per million
-      ppmCO2 = (co2.measure() * calibratedSlopeCO2) + calibratedInterceptCO2;   // Concentration of CO2 in parts per million
-      printMeasureScreen(measureArrowPos, ppmCO, ppmCO2, "0");//pm2_5);
+      //these three lines were commented...
+      pm.measure();         // PM sensor reads measurements, variables in PM library will contain the results
+      pm2_5 = pm.pm2_5;     // Concentration of PM that is 2.5micrometers
+      pm10 = pm.pm10;       // Concentration of PM that is 10micrometers
+      coRaw = co.measure();
+
+      // The below equation was old; It's off by a factor of 10
+      // ppmCO = (coRaw * calibratedSlopeCO) + calibratedInterceptCO;           // Concentration of CO in parts per million
+      
+      C_x = 1 / 0.494 * (coRaw - V_gas_0);
+
+      
+      
+//      Serial.print("CO raw: ");
+//      Serial.println(coRaw);
+      
+      
+      
+      co2Raw = co2.measure();
+      ppmPrelimCO2 = (co2Raw * prelimSlopeCO2) + prelimInterceptCO2;
+      ppmCO2 = (ppmPrelimCO2 * calibratedSlopeCO2) + calibratedInterceptCO2;   // Concentration of CO2 in parts per million
+      Serial.print("CO2 Raw: ");
+      Serial.println(co2Raw);
+
+      Serial.print("CO2 PPM: ");
+      Serial.println(ppmCO2);
+      
+      
+      printMeasureScreen(measureArrowPos, C_x, ppmCO2, pm2_5);
       break;
     case record:
-      printMeasureScreen(measureArrowPos, ppmCO, ppmCO2, "0");//pm2_5);
+      printMeasureScreen(measureArrowPos, C_x, ppmCO2, pm2_5);
       measureWaitButtons();
-      writeSuccess = writeToFile(rtc.now(), ppmCO, co.measure(), ppmCO2, co2.measure(), "0","0");//pm2_5, pm10);
+      writeSuccess = writeToFile(rtc.now(), C_x, coRaw, ppmCO2, co2Raw, pm2_5, pm10);
+      
+//      Serial.print("C_x: ");
+//      Serial.println(C_x);
+//      Serial.print("     CO calibrated ");
+//      Serial.println(ppmCO);
       break;
     case error:
       LED_RED();
@@ -307,17 +347,17 @@ void loop(void)
   }
 }
 
-void measureWaitButtons() 
+void measureWaitButtons()
 {
-  if (togglePushed) 
+  if (togglePushed)
   {
-    if (measureArrowState) 
-    { 
-      measureArrowState = false; 
+    if (measureArrowState)
+    {
+      measureArrowState = false;
       measureArrowPos = 65;
     }
-    else 
-    { 
+    else
+    {
       measureArrowState = true;
       measureArrowPos = 85;
     }
@@ -325,115 +365,134 @@ void measureWaitButtons()
   }
 }
 
-void optionsButtons() 
+void optionsButtons()
 {
-  if (togglePushed) 
-      {
-        togglePushed = false;
-        if (optionsArrowPos == 20) { optionsArrowPos = 55; }
-        else if (optionsArrowPos == 55) { optionsArrowPos = 92; }
-        else if (optionsArrowPos == 92) { optionsArrowPos = 65; }
-        else if (optionsArrowPos == 65) { optionsArrowPos = 85; }
-        else if (optionsArrowPos == 85) { optionsArrowPos = 20; }
-      }
-  if (selectPushed) 
-      {
-        selectPushed = false;
-        if (optionsArrowPos == 20) { measureTime = 150; Serial.println("10 sec");}
-        else if (optionsArrowPos == 55) { measureTime = (150*3) + (15*5); Serial.println("30 sec");}
-        else if (optionsArrowPos == 92) { measureTime = (150*6) + (15*12); Serial.println("1 min");}
-        else if (optionsArrowPos == 85) 
-        { 
-          Serial.println("Enter Menu State");
-          optionsArrowPos = 20;
-          menuArrowPos = 25;
-          menuArrowState = false;
-          clearScreen();
-          currentState = menu; 
-        }
-      }
+  if (togglePushed)
+  {
+    togglePushed = false;
+    if (optionsArrowPos == 20) {
+      optionsArrowPos = 55;
+    }
+    else if (optionsArrowPos == 55) {
+      optionsArrowPos = 92;
+    }
+    else if (optionsArrowPos == 92) {
+      optionsArrowPos = 65;
+    }
+    else if (optionsArrowPos == 65) {
+      optionsArrowPos = 85;
+    }
+    else if (optionsArrowPos == 85) {
+      optionsArrowPos = 20;
+    }
+  }
+  if (selectPushed)
+  {
+    selectPushed = false;
+    if (optionsArrowPos == 20) {
+      measureTime = 150;
+      Serial.println("10 sec");
+    }
+    else if (optionsArrowPos == 55) {
+      measureTime = (150 * 3) + (15 * 5);
+      Serial.println("30 sec");
+    }
+    else if (optionsArrowPos == 92) {
+      measureTime = (150 * 6) + (15 * 12);
+      Serial.println("1 min");
+    }
+    else if (optionsArrowPos == 85)
+    {
+      Serial.println("Enter Menu State");
+      optionsArrowPos = 20;
+      menuArrowPos = 25;
+      menuArrowState = false;
+      clearScreen();
+      currentState = menu;
+    }
+  }
 }
 
 // Initializes all of the sensors
-void initSensors(bool pmInit, bool coInit, bool co2Init, bool rtcInit, bool sdInit) 
+void initSensors(bool pmInit, bool coInit, bool co2Init, bool rtcInit, bool sdInit)
 {
   Serial.println("sdInit");
   bool sd = 0;
-  if (sdInit) 
+  if (sdInit)
   {
     sd = SD.begin();
   }
   Serial.println(sd);
   Serial.println("pmInit");
-  if (pmInit) 
+  if (pmInit)
   {
     pm.reset_measurement();               // Opens communication with the PM sensor
   }
   Serial.println("co2Init");
-  if (co2Init) 
+  if (co2Init)
   {
     co2.scd30.begin();                    // Intializes CO2 sensor
     co2.scd30.setMeasurementInterval(1);  // Fastest communication time with CO2 Sensor
   }
   Serial.println("coInit");
-  if (coInit) 
+  if (coInit)
   {
-    
+
   }
   Serial.println("rtcInit");
-  if (rtcInit) 
+  if (rtcInit)
   {
     rtc.begin();  // Initializes real time clock, uses RTC library
-    if (!rtc.isrunning()) 
+    if (!rtc.isrunning())
     {
       Serial.println("RTC is not running! Setting __DATE__ and __TIME__ to the date and time of last compile.");
       rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); // Will set the real time clock to the time from the computer system
     }
-    
-    // If you wish to reset the date and time to the time of 
+
+    // If you wish to reset the date and time to the time of
     // last compile, uncomment this line of code. Otherwise,
     // It will only get reset if the RTC stops running e.g.
-    // the battery dies, etc. 
-    
-    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); 
+    // the battery dies, etc.
+
+//        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
 }
 
 /*
- * Interrupt service routine:
- * 
- * When the attachInterrupt() function is called in the sleep state, 
- * this function is specified as the interrupt service routine (isr).
- * This means that when the RTC sends the interrupt signal, it calls 
- * this function right when the MCU wakes up and then continues 
- * execution where it left off (in the sleep state action).
- * 
- */
-void isr() 
+   Interrupt service routine:
+
+   When the attachInterrupt() function is called in the sleep state,
+   this function is specified as the interrupt service routine (isr).
+   This means that when the RTC sends the interrupt signal, it calls
+   this function right when the MCU wakes up and then continues
+   execution where it left off (in the sleep state action).
+
+*/
+void isr()
 {
   Serial.println("MCU is now awake");
 }
 
-void isrToggle() 
+void isrToggle()
 {
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
   // If interrupts come faster than 200ms, assume it's a bounce and ignore
-  if (interrupt_time - last_interrupt_time > 200) 
+  if (interrupt_time - last_interrupt_time > 200)
   {
     Serial.println("Pressed Toggle Button");
     togglePushed = true;
   }
   last_interrupt_time = interrupt_time;
-  
+
 }
 
-void isrSelect() 
+void isrSelect()
 {
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
   // If interrupts come faster than 200ms, assume it's a bounce and ignore
-  if (interrupt_time - last_interrupt_time > 200) 
+  if (interrupt_time - last_interrupt_time > 200)
   {
     Serial.println("Pressed Select Button");
     selectPushed = true;
