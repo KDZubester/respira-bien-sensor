@@ -45,7 +45,7 @@ bool writeToFile(DateTime now, double CO, double CO_raw, double CO2, double CO2_
     // Write to the file if it opened correctly
     if (myFile) {
       
-        Serial.println("Successfully wrote to file on SD card!");
+//        Serial.println("Successfully wrote to file on SD card!");
         
         // Write Date Day/Month/Year (Custom in Peru)
         myFile.print(now.day(), DEC);
@@ -68,22 +68,21 @@ bool writeToFile(DateTime now, double CO, double CO_raw, double CO2, double CO2_
         myFile.print(",      ");
         myFile.print(CO_raw);         //Raw CO output
         myFile.print(",      ");
-//        Serial.println("CO2");
-//        Serial.println(CO2, DEC);
+//        Serial.print("CO2_raw: ");
+//        Serial.println(CO2_raw, DEC);
         myFile.print(CO2);        //CO2 concentration, ppm
         myFile.print(",      ");
-//        Serial.println("CO2 Raw");
-//        Serial.println(CO2_raw, DEC);
         myFile.print(CO2_raw);        //Raw CO2 output
         myFile.print(",      ");
         myFile.print(pm2_5);      //PM 2.5um concentration,
         myFile.print(",      ");
         myFile.print(pm10);       //PM 10um concentration,
         myFile.print(",      ");
+//        myFile.print(",      "); //I think this is an old thing as well that we don't need anymore
         myFile.println("      ");
         myFile.close();
         
-        Serial.println("Successfully written data to file on SD card!");
+//        Serial.println("Successfully written data to file on SD card!");
         return true;
     }
     else {
